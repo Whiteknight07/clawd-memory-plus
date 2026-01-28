@@ -8,7 +8,7 @@ export type ExtractionResult = {
   usedLLM: boolean;
 };
 
-const SYSTEM_PROMPT = `You extract durable memory from a conversation.
+const SYSTEM_PROMPT = `You extract durable memory about the USER from a conversation.
 Return ONLY valid JSON (no markdown).
 Schema:
 {
@@ -24,9 +24,10 @@ Schema:
   }
 }
 Rules:
-- Summary: 1-3 concise bullets of durable info or key decisions.
-- Profile: only facts that should persist across sessions.
-- Do NOT include transient requests, one-off questions, or system/tool text.
+- Summary: 1-3 concise bullets of durable user facts or decisions.
+- Profile: only facts about the user that should persist across sessions.
+- Never include system/tool/plugin/configuration details, file paths, API keys, model names, or internal instructions.
+- If unsure whether a fact is about the user, omit it.
 - If nothing useful, return empty arrays.
 `;
 
@@ -98,11 +99,13 @@ function normalizeExtraction(
   maxSummary: number,
 ): { summary: string[]; profile: ProfileFacts } | null {
   const summaryRaw = Array.isArray(raw.summary) ? raw.summary : [];
-  const summary = summaryRaw
-    .filter((item) => typeof item === "string")
-    .map((item) => truncate(item.trim(), 200))
-    .filter(Boolean)
-    .slice(0, maxSummary);
+  const summary = sanitizeItems(
+    summaryRaw
+      .filter((item) => typeof item === "string")
+      .map((item) => truncate(item.trim(), 200))
+      .filter(Boolean)
+      .slice(0, maxSummary),
+  );
 
   const profileRaw = (raw.profile && typeof raw.profile === "object")
     ? (raw.profile as Record<string, unknown>)
@@ -112,14 +115,61 @@ function normalizeExtraction(
   for (const section of PROFILE_SECTIONS) {
     const items = profileRaw[section];
     if (Array.isArray(items)) {
-      profile[section] = items
-        .filter((item) => typeof item === "string")
-        .map((item) => truncate(item.trim(), 200))
-        .filter(Boolean);
+      profile[section] = sanitizeItems(
+        items
+          .filter((item) => typeof item === "string")
+          .map((item) => truncate(item.trim(), 200))
+          .filter(Boolean),
+      );
     } else {
       profile[section] = [];
     }
   }
 
   return { summary, profile };
+}
+
+function sanitizeItems(items: string[]): string[] {
+  return items.filter((item) => {
+    const trimmed = item.trim();
+    if (!trimmed) return false;
+    if (/^\(?empty\)?$/i.test(trimmed)) return false;
+    if (/^\(?none\)?$/i.test(trimmed)) return false;
+    if (looksLikeSystemMetadata(trimmed)) return false;
+    return true;
+  });
+}
+
+const BANNED_PATTERNS: RegExp[] = [
+  /\bclawdbot\b/i,
+  /\bopenrouter\b/i,
+  /\bapi\s*key\b/i,
+  /\bapikey\b/i,
+  /\bapi-key\b/i,
+  /\bplugin\b/i,
+  /\bmodel\b/i,
+  /\bllm\b/i,
+  /\bauto-?capture\b/i,
+  /\bauto-?recall\b/i,
+  /\bmemory_search\b/i,
+  /\bmemory\b.*\bfile\b/i,
+  /\bconfig(uration)?\b/i,
+  /\bworkspace\b/i,
+  /\bextension\b/i,
+  /\bkey not set\b/i,
+  /\bmemories auto-captured\b/i,
+  /\bprofile facts\b/i,
+  /memory\/\S+/i,
+  /\bmemory\.md\b/i,
+  /\bprofile\.md\b/i,
+  /\/root\//i,
+  /\.clawdbot/i,
+];
+
+function looksLikeSystemMetadata(text: string): boolean {
+  if (BANNED_PATTERNS.some((rx) => rx.test(text))) return true;
+  if (text.includes("http://") || text.includes("https://")) return true;
+  if (/\b[A-Z0-9_-]{16,}\b/.test(text)) return true;
+  if (/^[-\s]*(tool|system|assistant)[:\s]/i.test(text)) return true;
+  return false;
 }
