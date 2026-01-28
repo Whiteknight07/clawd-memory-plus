@@ -30,6 +30,7 @@ export function buildRecallHandler(
 
     state.turn += 1;
     const includeProfile = cfg.profileFrequency > 0 && state.turn % cfg.profileFrequency === 0;
+    debugLog(api, cfg, `recall: turn=${state.turn} includeProfile=${includeProfile}`);
 
     let searchResults: Array<Record<string, unknown>> = [];
     try {
@@ -54,7 +55,10 @@ export function buildRecallHandler(
       ? await formatProfile(ctx.workspaceDir)
       : "";
 
-    if (snippets.length === 0 && !profileBlock) return;
+    if (snippets.length === 0 && !profileBlock) {
+      debugLog(api, cfg, "recall: no snippets/profile to inject");
+      return;
+    }
 
     const parts: string[] = [
       CONTEXT_TAG,
@@ -73,6 +77,7 @@ export function buildRecallHandler(
 
     parts.push("</clawd-memory-context>");
 
+    debugLog(api, cfg, `recall: injected snippets=${snippets.length} profile=${profileBlock ? "yes" : "no"}`);
     return {
       prependContext: parts.join("\n"),
     };
@@ -124,4 +129,10 @@ async function formatProfile(workspaceDir?: string): Promise<string> {
   } catch {
     return "";
   }
+}
+
+function debugLog(api: ClawdbotPluginApi, cfg: MemoryPlusConfig, message: string) {
+  if (!cfg.debug) return;
+  const log = api.logger.debug ?? api.logger.info;
+  log(`clawd-memory-plus: ${message}`);
 }

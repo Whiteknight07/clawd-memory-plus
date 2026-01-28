@@ -1,6 +1,7 @@
 export type MemoryPlusConfig = {
   autoCapture: boolean;
   autoRecall: boolean;
+  debug: boolean;
   summaryMaxBullets: number;
   minCaptureChars: number;
   maxRecallResults: number;
@@ -31,6 +32,7 @@ export const memoryPlusConfigSchema = {
     const cfg: MemoryPlusConfig = {
       autoCapture: raw.autoCapture !== false,
       autoRecall: raw.autoRecall !== false,
+      debug: raw.debug === true,
       summaryMaxBullets: readNumber(raw.summaryMaxBullets, 3, 1, 10),
       minCaptureChars: readNumber(raw.minCaptureChars, 20, 0, 5000),
       maxRecallResults: readNumber(raw.maxRecallResults, 5, 1, 20),
@@ -54,6 +56,11 @@ export const memoryPlusConfigSchema = {
     autoRecall: {
       label: "Auto-Recall",
       help: "Inject relevant memories before each turn",
+    },
+    debug: {
+      label: "Debug Logging",
+      help: "Log capture/recall decisions and summary output",
+      advanced: true,
     },
     summaryMaxBullets: {
       label: "Summary Bullet Limit",
@@ -101,6 +108,7 @@ export const memoryPlusConfigSchema = {
     properties: {
       autoCapture: { type: "boolean" },
       autoRecall: { type: "boolean" },
+      debug: { type: "boolean" },
       summaryMaxBullets: { type: "number" },
       minCaptureChars: { type: "number" },
       maxRecallResults: { type: "number" },

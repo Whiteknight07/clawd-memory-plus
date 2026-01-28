@@ -18,10 +18,19 @@ export function buildCaptureHandler(api: ClawdbotPluginApi, cfg: MemoryPlusConfi
 
     const messages = flattenMessages(event.messages);
     const pair = pickLastUserAssistantPair(messages);
-    if (!pair) return;
+    if (!pair) {
+      debugLog(api, cfg, "capture: no user/assistant pair found");
+      return;
+    }
 
-    if (pair.user.includes(CONTEXT_TAG) || pair.assistant.includes(CONTEXT_TAG)) return;
-    if (pair.user.trim().length < cfg.minCaptureChars) return;
+    if (pair.user.includes(CONTEXT_TAG) || pair.assistant.includes(CONTEXT_TAG)) {
+      debugLog(api, cfg, "capture: skipped injected context");
+      return;
+    }
+    if (pair.user.trim().length < cfg.minCaptureChars) {
+      debugLog(api, cfg, `capture: skipped short user msg (${pair.user.trim().length})`);
+      return;
+    }
 
     let summary: string[] = [];
     let profile: Record<string, string[]> | null = null;
@@ -30,24 +39,41 @@ export function buildCaptureHandler(api: ClawdbotPluginApi, cfg: MemoryPlusConfi
     if (extracted) {
       summary = extracted.summary;
       profile = extracted.profile;
+      debugLog(api, cfg, `capture: LLM summary=${summary.length} profile=${countFacts(profile)}`);
     }
 
     if (!summary || summary.length === 0) {
       summary = buildRuleBasedSummary(pair.user, cfg.summaryMaxBullets);
+      debugLog(api, cfg, `capture: rule summary=${summary.length}`);
     }
 
-    if (!summary || summary.length === 0) return;
+    if (!summary || summary.length === 0) {
+      debugLog(api, cfg, "capture: nothing to write");
+      return;
+    }
 
     await appendDailySummary(ctx.workspaceDir, summary);
+    debugLog(api, cfg, `capture: wrote ${summary.length} bullets`);
 
     if (profile && hasProfileFacts(profile)) {
       await updateProfileFile(ctx.workspaceDir, PROFILE_PATH, profile);
+      debugLog(api, cfg, "capture: updated profile.md");
     }
   };
 }
 
 function hasProfileFacts(profile: Record<string, string[]>): boolean {
   return Object.values(profile).some((arr) => Array.isArray(arr) && arr.length > 0);
+}
+
+function countFacts(profile: Record<string, string[]>): number {
+  return Object.values(profile).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+}
+
+function debugLog(api: ClawdbotPluginApi, cfg: MemoryPlusConfig, message: string) {
+  if (!cfg.debug) return;
+  const log = api.logger.debug ?? api.logger.info;
+  log(`clawd-memory-plus: ${message}`);
 }
 
 async function appendDailySummary(workspaceDir: string, summary: string[]): Promise<void> {
