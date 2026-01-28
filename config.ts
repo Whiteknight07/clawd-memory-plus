@@ -1,5 +1,3 @@
-import { Type } from "@sinclair/typebox";
-
 export type MemoryPlusConfig = {
   autoCapture: boolean;
   autoRecall: boolean;
@@ -97,23 +95,29 @@ export const memoryPlusConfigSchema = {
       advanced: true,
     },
   },
-  jsonSchema: Type.Object({
-    autoCapture: Type.Optional(Type.Boolean()),
-    autoRecall: Type.Optional(Type.Boolean()),
-    summaryMaxBullets: Type.Optional(Type.Number()),
-    minCaptureChars: Type.Optional(Type.Number()),
-    maxRecallResults: Type.Optional(Type.Number()),
-    minRecallScore: Type.Optional(Type.Number()),
-    profileFrequency: Type.Optional(Type.Number()),
-    openRouter: Type.Optional(
-      Type.Object({
-        apiKey: Type.Optional(Type.String()),
-        model: Type.Optional(Type.String()),
-        baseUrl: Type.Optional(Type.String()),
-        timeoutMs: Type.Optional(Type.Number()),
-      }),
-    ),
-  }),
+  jsonSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      autoCapture: { type: "boolean" },
+      autoRecall: { type: "boolean" },
+      summaryMaxBullets: { type: "number" },
+      minCaptureChars: { type: "number" },
+      maxRecallResults: { type: "number" },
+      minRecallScore: { type: "number" },
+      profileFrequency: { type: "number" },
+      openRouter: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          apiKey: { type: "string" },
+          model: { type: "string" },
+          baseUrl: { type: "string" },
+          timeoutMs: { type: "number" },
+        },
+      },
+    },
+  },
 };
 
 function readString(value: unknown): string | undefined {
