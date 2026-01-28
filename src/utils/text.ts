@@ -81,13 +81,59 @@ export function extractJson(text: string): unknown | null {
 }
 
 export function dedupePreserveOrder(items: string[]): string[] {
-  const seen = new Set<string>();
   const out: string[] = [];
+  const norms: string[] = [];
+  
   for (const item of items) {
     const norm = normalizeFact(item);
-    if (!norm || seen.has(norm)) continue;
-    seen.add(norm);
-    out.push(item);
+    if (!norm) continue;
+    
+    // Check for exact match
+    if (norms.includes(norm)) continue;
+    
+    // Check for fuzzy/subset duplicates
+    let dominated = false;
+    let dominatesIdx = -1;
+    
+    for (let i = 0; i < norms.length; i++) {
+      const existing = norms[i];
+      // If new fact is subset of existing, skip it
+      if (existing.includes(norm) || similarity(norm, existing) > 0.8) {
+        dominated = true;
+        break;
+      }
+      // If new fact is superset of existing, replace existing
+      if (norm.includes(existing) || similarity(existing, norm) > 0.8) {
+        dominatesIdx = i;
+        break;
+      }
+    }
+    
+    if (dominated) continue;
+    
+    if (dominatesIdx >= 0) {
+      // Replace shorter with longer/newer
+      out[dominatesIdx] = item;
+      norms[dominatesIdx] = norm;
+    } else {
+      out.push(item);
+      norms.push(norm);
+    }
   }
   return out;
+}
+
+// Simple word-overlap similarity (Jaccard-ish)
+function similarity(a: string, b: string): number {
+  const wordsA = new Set(a.split(/\s+/).filter(w => w.length > 2));
+  const wordsB = new Set(b.split(/\s+/).filter(w => w.length > 2));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  
+  let overlap = 0;
+  for (const w of wordsA) {
+    if (wordsB.has(w)) overlap++;
+  }
+  
+  const smaller = Math.min(wordsA.size, wordsB.size);
+  return overlap / smaller;
 }
